@@ -23,41 +23,31 @@ import java.util.regex.Pattern;
 public class ExampleMod implements ClientModInitializer {
     public static final String MOD_ID = "chatstats";
     
-    // Lokaler Speicher für die Rangliste (Spielername -> Anzahl Nachrichten)
     private static Map<String, Integer> chatDatenbank = new HashMap<>();
     private static File speicherDatei;
     private static final Gson gson = new GsonBuilder().setPrettyPrinting().create();
 
-    // Regex-Muster, um den Spielernamen aus typischen Server-Chats zu filtern
-    // Erkennt Formate wie: <Spielername> Text, [Rang] Spielername: Text, Spielername >> Text
     private static final Pattern CHAT_PATTERN = Pattern.compile("(?:<|\\[|\\b)([A-Za-z0-9_]{3,16})(?:>|\\]|\\b)(?:\\s*>>|\\s*:|\\s*:)");
 
     @Override
     public void onInitializeClient() {
-        // 1. Speicherpfad im Minecraft-Config-Ordner festlegen
         Path configPfad = FabricLoader.getInstance().getConfigDir();
         speicherDatei = configPfad.resolve("chatstats.json").toFile();
-        
-        // Gespeicherte Daten beim Starten laden
         datenLaden();
 
-        // 2. CHAT-LISTENER: Eingehende Nachrichten analysieren
+        // 1. CHAT-LISTENER
         ClientReceiveMessageEvents.CHAT.register((message, signedMessage, sender, params, timestamp) -> {
             String bereinigterText = message.getString();
             Matcher matcher = CHAT_PATTERN.matcher(bereinigterText);
             
             if (matcher.find()) {
                 String spielerName = matcher.group(1);
-                
-                // Nachricht hochzählen und in der Datenbank speichern
                 chatDatenbank.put(spielerName, chatDatenbank.getOrDefault(spielerName, 0) + 1);
-                
-                // Sofort auf der Festplatte sichern
                 datenSpeichern();
             }
         });
 
-        // 3. IN-GAME BEFEHL: /chatstats registrieren
+        // 2. KORRIGIERTER IN-GAME BEFEHL
         ClientCommandRegistrationCallback.EVENT.register((dispatcher, registryAccess) -> {
             dispatcher.register(ClientCommandManager.literal("chatstats")
                 .executes(context -> {
@@ -68,7 +58,6 @@ public class ExampleMod implements ClientModInitializer {
 
                     context.getSource().sendFeedback(Component.literal("§6------ §eCHAT RANGLISTE (Dauerhaft) §6------"));
                     
-                    // Sortieren nach den meisten Nachrichten und die Top 10 ausgeben
                     chatDatenbank.entrySet().stream()
                         .sorted(Map.Entry.<String, Integer>comparingByValue().reversed())
                         .limit(10)
@@ -85,7 +74,6 @@ public class ExampleMod implements ClientModInitializer {
         });
     }
 
-    // Speichert die Map als JSON-Datei ab
     private static void datenSpeichern() {
         try (FileWriter writer = new FileWriter(speicherDatei)) {
             gson.toJson(chatDatenbank, writer);
@@ -94,7 +82,6 @@ public class ExampleMod implements ClientModInitializer {
         }
     }
 
-    // Lädt die Map aus der JSON-Datei
     private static void datenLaden() {
         if (!speicherDatei.exists()) return;
         
